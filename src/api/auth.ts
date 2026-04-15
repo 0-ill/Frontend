@@ -25,12 +25,26 @@ export type SignupRequest = {
   emailVerified?: boolean;
 };
 
+export type ResetPasswordRequest = {
+  email: string;
+  code: string;
+  newPassword: string;
+};
+
 function pickBooleanAvailable(body: any): boolean {
   const available = body?.data?.available ?? body?.available;
   if (typeof available !== "boolean") {
     throw new Error("INVALID_AVAILABLE_RESPONSE");
   }
   return available;
+}
+
+function pickBooleanFlag(body: any, fieldName: string): boolean {
+  const value = body?.data?.[fieldName] ?? body?.[fieldName];
+  if (typeof value !== "boolean") {
+    throw new Error(`INVALID_${fieldName.toUpperCase()}_RESPONSE`);
+  }
+  return value;
 }
 
 export async function login(req: LoginRequest): Promise<LoginResponse> {
@@ -90,12 +104,37 @@ export async function verifyEmailCode(email: string, code: string): Promise<bool
     email: email.trim().toLowerCase(),
     code: code.trim(),
   });
-  const body = res.data;
-  const verified = body?.data?.verified ?? body?.verified;
-  if (typeof verified !== "boolean") {
-    throw new Error("INVALID_VERIFY_RESPONSE");
-  }
-  return verified;
+  return pickBooleanFlag(res.data, "verified");
+}
+
+// TODO(backend): 아래 비밀번호 재설정 API 경로는 프론트에서 먼저 제안한 계약입니다.
+// 실제 백엔드 경로/응답 필드명이 다르면 이 파일만 맞추면 화면은 그대로 동작합니다.
+export async function sendPasswordResetCode(email: string): Promise<void> {
+  await apiClient.post("/api/auth/password/send-reset-code", {
+    email: email.trim().toLowerCase(),
+  });
+}
+
+export async function verifyPasswordResetCode(email: string, code: string): Promise<boolean> {
+  const res = await apiClient.post("/api/auth/password/verify-reset-code", {
+    email: email.trim().toLowerCase(),
+    code: code.trim(),
+  });
+  return pickBooleanFlag(res.data, "verified");
+}
+
+export async function resetPassword(req: {
+  username: string;
+  email: string;
+  code: string;
+  newPassword: string
+}): Promise<void> {
+  await apiClient.post("/api/auth/password/reset", {
+    username: req.username.trim(),   // 🔥 추가
+    email: req.email.trim().toLowerCase(),
+    code: req.code.trim(),
+    newPassword: req.newPassword.trim(), // 🔥 trim도 추가
+  });
 }
 
 export async function signup(req: SignupRequest): Promise<void> {
@@ -106,11 +145,14 @@ export async function signup(req: SignupRequest): Promise<void> {
   await apiClient.post("/api/auth/signup", {
     username: req.username.trim(),
     email: req.email.trim().toLowerCase(),
-    password: req.password,
+    password: req.password.trim(),
     phoneNumber: req.phoneNumber.replace(/[^0-9]/g, ""),
     residenceType: req.residenceType,
     rentType: req.rentType,
     address: req.address?.trim() || "",
     emailVerified: true,
+    termsAgreed: true,        // 🔥 추가
+    privacyAgreed: true,      // 🔥 추가
+    marketingAgreed: false,   // 🔥 선택값
   });
 }
